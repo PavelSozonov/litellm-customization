@@ -1,0 +1,81 @@
+services:
+  # ─────────────── DB for LiteLLM ─────────────
+  db-litellm:
+    image: postgres:15
+    container_name: db-litellm
+    platform: linux/arm64
+    environment:
+      POSTGRES_USER:     admin
+      POSTGRES_PASSWORD: pass
+      POSTGRES_DB:       litellm_db
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres-data-litellm:/var/lib/postgresql/data
+    healthcheck:
+      test:         ["CMD-SHELL", "pg_isready -U admin -d litellm_db"]
+      start_period: 30s
+      interval:     5s
+      timeout:      5s
+      retries:      5
+    restart: on-failure
+
+  # ─────────────── LiteLLM ─────────────
+  litellm:
+    build:
+      context: ./litellm
+      dockerfile: Dockerfile
+    container_name: litellm
+    platform: linux/arm64
+    ports:
+      - "4000:4000"
+    environment:
+      LITELLM_ADMIN_USER:     admin
+      LITELLM_ADMIN_PASSWORD: pass
+      HOST:                   0.0.0.0
+      PORT:                   4000
+      DATABASE_URL:           postgresql://admin:pass@db-litellm:5432/litellm_db
+      LITELLM_MASTER_KEY:     sk-1234
+      LITELLM_SALT_KEY:       sk-litellm-salt-key
+      STORE_MODEL_IN_DB:      "True"
+    volumes:
+      - ./litellm/config:/app/config
+    depends_on:
+      db-litellm:
+        condition: service_healthy
+    healthcheck:
+      test:         ["CMD-SHELL", "curl -sf http://localhost:4000/health/readiness || exit 1"]
+      start_period: 30s
+      interval:     10s
+      timeout:      10s
+      retries:      10
+    restart: on-failure
+
+  # ────────────────────────── pgAdmin ──────────────────────────
+  pgadmin:
+    image: dpage/pgadmin4
+    container_name: pgadmin
+    platform: linux/arm64
+    ports:
+      - "5050:80"
+    environment:
+      PGADMIN_DEFAULT_EMAIL:      admin@example.com
+      PGADMIN_DEFAULT_PASSWORD:   pass
+      PGADMIN_CONFIG_SERVER_MODE: "False"
+    volumes:
+      - pgadmin_data:/var/lib/pgadmin
+      - ./pgadmin/servers.json:/pgadmin4/servers.json
+    depends_on:
+      db-litellm:
+        condition: service_healthy
+    healthcheck:
+      test:         ["CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://localhost')"]
+      start_period: 30s
+      interval:     10s
+      timeout:      10s
+      retries:      10
+    restart: unless-stopped
+
+volumes:
+  postgres-data-litellm:
+  pgadmin_data:
