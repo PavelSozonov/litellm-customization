@@ -31,6 +31,7 @@ ENV PATH=/home/app/.local/bin:$PATH \
 COPY --chown=appuser:appuser --from=builder /root/.local /home/app/.local
 COPY --chown=appuser:appuser override/proxy/proxy_cli.py \
      /home/app/.local/lib/python3.13/site-packages/litellm/proxy/proxy_cli.py
+COPY --chown=appuser:appuser openai_openapi.yaml /app/openai_openapi.yaml
 
 COPY config/config.yaml /app/config/
 

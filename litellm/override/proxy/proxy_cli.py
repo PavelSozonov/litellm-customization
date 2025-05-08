@@ -751,9 +751,59 @@ def run_server(  # noqa: PLR0915
         # DO NOT DELETE - enables global variables to work across files
         from litellm.proxy.proxy_server import app  # noqa
 
+
         ## Custom patch BEGIN ##
-        app.title = "LiteLLM API. Custom"
+
+        app.title = "LiteLLM API + OpenAI API 2.0.0 Spec"
+        app.description = "Proxy Server to call 100+ LLMs in the OpenAI format. [**Customize Swagger Docs**](https://docs.litellm.ai/docs/proxy/enterprise#swagger-docs---custom-routes--branding)\n\n👉 [```LiteLLM Admin Panel on /ui```](/ui/). Create, Edit Keys with SSO\n\n💸 [```LiteLLM Model Cost Map```](https://models.litellm.ai/)."
+
+        from pathlib import Path
+        import yaml, json
+        from fastapi.openapi.utils import get_openapi
+
+        # Hard-code the path under /app
+        SPEC_PATH = Path("/app/openai_openapi.yaml")
+
+        def custom_openapi():
+            if app.openapi_schema:
+                return app.openapi_schema
+
+            base = get_openapi(
+                title=app.title,
+                version=app.version,
+                routes=app.routes,
+            )
+
+            base["info"]["description"] = (
+                "Proxy Server to call 100+ LLMs in the OpenAI format. "
+                "[**Customize Swagger Docs**]"
+                "(https://docs.litellm.ai/docs/proxy/enterprise#swagger-docs---custom-routes--branding)\n\n"
+                "👉 [```LiteLLM Admin Panel on /ui```](/ui/). Create, Edit Keys with SSO\n\n"
+                "💸 [```LiteLLM Model Cost Map```]"
+                "(https://models.litellm.ai/)."
+            )
+
+            text = SPEC_PATH.read_text()
+            try:
+                spec = yaml.safe_load(text)
+            except yaml.YAMLError:
+                spec = json.loads(text)
+
+            for path, item in spec.get("paths", {}).items():
+                base["paths"][path] = item
+            comps = spec.get("components", {})
+            for section in ("schemas", "securitySchemes"):
+                base.setdefault("components", {}) \
+                    .setdefault(section, {}) \
+                    .update(comps.get(section, {}))
+
+            app.openapi_schema = base
+            return base
+
+        app.openapi = custom_openapi
+
         ## Custom patch END ##
+
 
         uvicorn_args = ProxyInitializationHelpers._get_default_unvicorn_init_args(
             host=host,
