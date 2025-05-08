@@ -754,8 +754,8 @@ def run_server(  # noqa: PLR0915
 
         ## Custom patch BEGIN ##
 
+        # Custom title
         app.title = "LiteLLM API + OpenAI API 2.0.0 Spec"
-        app.description = "Proxy Server to call 100+ LLMs in the OpenAI format. [**Customize Swagger Docs**](https://docs.litellm.ai/docs/proxy/enterprise#swagger-docs---custom-routes--branding)\n\n👉 [```LiteLLM Admin Panel on /ui```](/ui/). Create, Edit Keys with SSO\n\n💸 [```LiteLLM Model Cost Map```](https://models.litellm.ai/)."
 
         from pathlib import Path
         import yaml, json
@@ -765,15 +765,18 @@ def run_server(  # noqa: PLR0915
         SPEC_PATH = Path("/app/openai_openapi.yaml")
 
         def custom_openapi():
+            # Return cached schema if already built
             if app.openapi_schema:
                 return app.openapi_schema
 
+            # 1) Generate FastAPI’s base schema
             base = get_openapi(
                 title=app.title,
                 version=app.version,
                 routes=app.routes,
             )
 
+            # 2) Inject a custom description
             base["info"]["description"] = (
                 "Proxy Server to call 100+ LLMs in the OpenAI format. "
                 "[**Customize Swagger Docs**]"
@@ -783,23 +786,41 @@ def run_server(  # noqa: PLR0915
                 "(https://models.litellm.ai/)."
             )
 
+            # 3) Load and merge the OpenAI spec (YAML → JSON fallback)
             text = SPEC_PATH.read_text()
             try:
                 spec = yaml.safe_load(text)
             except yaml.YAMLError:
                 spec = json.loads(text)
 
+            # Merge all paths
             for path, item in spec.get("paths", {}).items():
                 base["paths"][path] = item
+
+            # Merge components (schemas, securitySchemes, etc.)
             comps = spec.get("components", {})
             for section in ("schemas", "securitySchemes"):
                 base.setdefault("components", {}) \
                     .setdefault(section, {}) \
                     .update(comps.get(section, {}))
 
+            # 4) Ensure the single APIKeyHeader scheme is defined
+            components = base.setdefault("components", {})
+            security_schemes = components.setdefault("securitySchemes", {})
+            security_schemes["APIKeyHeader"] = {
+                "type": "apiKey",
+                "in": "header",
+                "name": "x-litellm-api-key",
+            }
+
+            # 5) Apply this security requirement globally
+            base["security"] = [{"APIKeyHeader": []}]
+
+            # Cache and return
             app.openapi_schema = base
             return base
 
+        # Override FastAPI’s OpenAPI generator
         app.openapi = custom_openapi
 
         ## Custom patch END ##
