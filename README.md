@@ -1,67 +1,62 @@
-# Token Generator Micro‑Service
+# LiteLLM Customization Toolkit
 
-A full‑stack reference project that demonstrates:
+A reference project showing how to extend and deploy a customized LiteLLM gateway with Docker Compose and PostgreSQL.
 
-* **FastAPI** micro‑service that authenticates against LDAP, mints one LiteLLM API‑key per user and caches it in Postgres.
-* **Next.js 15** front‑end (React 19, Tailwind 4, TypeScript) for self‑service token retrieval.
-* **Docker‑Compose** orchestration for LDAP, LiteLLM gateway, both Postgres instances, pgAdmin, back‑end, front‑end and an automated test‑runner.
-* **Pytest** integration tests checking authentication flow, single‑token guarantee and race‑condition safety.
+## Features
 
-The stack is completely vendor‑neutral – you can point it at *any* LDAP directory, host it on ARM or x86, run it locally with Compose or ship the images to Kubernetes.
+- **Docker Compose orchestration**  
+  Brings up the LiteLLM gateway alongside a PostgreSQL database in one command.
+- **Customizable Dockerfile**  
+  Demonstrates how to inject your own code and configuration over the base LiteLLM image.
+- **Proxy override example**  
+  Includes an example of overriding the built-in proxy CLI within the LiteLLM package.
 
----
+## Prerequisites
 
-## Quick Start (local Docker Desktop)
+- [Docker](https://docs.docker.com/get-docker/) ≥ 20.10
+- [Docker Compose](https://docs.docker.com/compose/intro/) ≥ 1.29
+- (Optional) [Make](https://www.gnu.org/software/make/) for helper commands
 
-```bash
-git clone <repo>
-cd token-generator
+## Project Structure
 
-# build & start everything
-docker-compose up --build -d
-
-# run the smoke‑tests
-docker compose run --rm test
+```
+.
+├── config/
+│   └── config.yaml            # LiteLLM configuration
+├── docker-compose.yml         # Service definitions
+├── Dockerfile                 # Base image and customization steps
+├── override/
+│   └── proxy/
+│       └── proxy_cli.py       # Example override for proxy CLI
+├── requirements.txt           # Pinned Python dependencies
+└── README.md                  # This file
 ```
 
-Open http://localhost:3000 – create a token, copy it, call the gateway:
+## Getting Started
 
-```bash
-curl -H "Authorization: Bearer <TOKEN>" http://localhost:4000/v1/models
-```
+1. **Build and start the services**
+   ```bash
+   docker compose up -d --build
+   ```
 
----
+2. **Check logs**
+   ```bash
+   docker compose logs -f litellm
+   ```
 
-## Directory layout
+3. **Open the API**  
+   By default, LiteLLM listens on port 4000.
+   ```
+   http://localhost:4000/healthz
+   ```
 
-| Path | What lives here |
-|------|-----------------|
-| `token-generator/` | FastAPI service (+ Dockerfile) |
-| `frontend/` | Next.js app (+ Tailwind config, Dockerfile) |
-| `litellm/` | Pre‑configured LiteLLM gateway |
-| `ldap/` | OpenLDAP image + seed users |
-| `pgadmin/` | pgAdmin desktop for both Postgres instances |
-| `tests/` | Pytest docker image & suites |
-| `docker-compose.yml` | one‑shot dev orchestration |
+## Customization
 
----
+- **Adding dependencies**  
+  Update `requirements.txt` and rebuild:
+  ```bash
+  docker compose up -d --build litellm
+  ```
 
-## Environment variables (excerpt)
-
-| Service | Variable | Default | Description |
-|---------|----------|---------|-------------|
-| back‑end | `LDAP_SERVER_HOST` | `ldap` | host of LDAP directory |
-| back‑end | `LITELLM_BASE_URL` | `http://litellm:4000` | REST endpoint of LiteLLM |
-| back‑end | `LITELLM_MASTER_KEY` | `sk-1234` | admin key used to issue user keys |
-| front‑end | `NEXT_PUBLIC_API_URL` | `http://localhost:8000` | back‑end HTTP origin |
-
-Edit **`docker‑compose.override.yml`** or pass `-e` overrides when deploying.
-
----
-
-## Development tips
-
-* The front‑end supports **hot‑reload** – `npm run dev` outside Docker is fastest.
-* Run unit tests with `pytest -q` in **token‑generator/**.
-* Use pgAdmin (http://localhost:5050) to inspect both databases.
-* LDAP users are declared in `ldap/ldif/users.ldif`; restart the LDAP container after editing.
+- **Overriding code**  
+  Any files you place under `override/` (e.g. `override/proxy/proxy_cli.py`) will replace the originals in the LiteLLM package.
