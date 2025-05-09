@@ -2,12 +2,32 @@
 
 A reference project showing how to extend and deploy a customized LiteLLM gateway with Docker Compose and PostgreSQL.
 
+# LiteLLM Proxy + OpenAI Spec Integration
+
+A reference project that extends the LiteLLM proxy by merging it with the official OpenAI API 2.0.0 OpenAPI spec, cleaning out unwanted fields, and unifying authentication under a single `x-litellm-api-key` header.
+
+## Why these modifications?
+
+- **Merge OpenAI routes**  
+  Combine LiteLLM’s existing `/chat/completions`, `/embeddings`, etc., with the full OpenAI spec so your proxy supports every OpenAI-compatible endpoint out of the box.
+
+- **Clean the spec**  
+  Strip out extraneous `"user"` fields and OpenAI’s proprietary `x-oaiMeta` extensions, keeping only the parts you need and ensuring your documentation stays focused.
+
+- **Custom API metadata**  
+  Override the default title and description in Swagger UI with a branded message and links to your LiteLLM admin panel and model cost map.
+
+- **Unified authentication**  
+  Remove duplicated “Bearer token” schemes and enforce a single `APIKeyHeader` (`x-litellm-api-key`) for all operations. Swagger UI will show one lock icon and automatically inject your API key header.
+
 ## Features
 
 - **Docker Compose orchestration**  
   Brings up the LiteLLM gateway alongside a PostgreSQL database in one command.
+
 - **Customizable Dockerfile**  
   Demonstrates how to inject your own code and configuration over the base LiteLLM image.
+
 - **Proxy override example**  
   Includes an example of overriding the built-in proxy CLI within the LiteLLM package.
 
@@ -15,48 +35,37 @@ A reference project showing how to extend and deploy a customized LiteLLM gatewa
 
 - [Docker](https://docs.docker.com/get-docker/) ≥ 20.10
 - [Docker Compose](https://docs.docker.com/compose/intro/) ≥ 1.29
-- (Optional) [Make](https://www.gnu.org/software/make/) for helper commands
-
-## Project Structure
-
-```
-.
-├── config/
-│   └── config.yaml            # LiteLLM configuration
-├── docker-compose.yml         # Service definitions
-├── Dockerfile                 # Base image and customization steps
-├── override/
-│   └── proxy/
-│       └── proxy_cli.py       # Example override for proxy CLI
-├── requirements.txt           # Pinned Python dependencies
-└── README.md                  # This file
-```
 
 ## Getting Started
 
-1. **Build and start the services**
+1. **Place your OpenAI spec**  
+   Download or maintain `openai_openapi.yaml` in the project root.
+
+2. **Build & run**
    ```bash
    docker compose up -d --build
-   ```
 
-2. **Check logs**
-   ```bash
-   docker compose logs -f litellm
-   ```
+3. **View Swagger UI**
+   Open http://localhost:4000/docs and authorize with your x-litellm-api-key.
 
-3. **Open the API**  
-   By default, LiteLLM listens on port 4000.
-   ```
-   http://localhost:4000/healthz
-   ```
+4. **Call any endpoint**
+   All merged OpenAI and LiteLLM routes now appear in one unified API.
 
-## Customization
+## How It Works
 
-- **Adding dependencies**  
-  Update `requirements.txt` and rebuild:
-  ```bash
-  docker compose up -d --build litellm
-  ```
+In override/proxy_cli.py, the custom_openapi() function:
 
-- **Overriding code**  
-  Any files you place under `override/` (e.g. `override/proxy/proxy_cli.py`) will replace the originals in the LiteLLM package.
+1. Loads your base LiteLLM schema via get_openapi().
+
+2. Injects a custom title & description.
+
+3. Reads /app/openai_openapi.yaml, falls back from YAML to JSON.
+
+4. Recursively strips "user" and x-oaiMeta fields.
+
+5. Merges all OpenAI paths and components.
+
+6. Defines a single APIKeyHeader security scheme (x-litellm-api-key) and applies it globally.
+
+FastAPI then serves the combined schema at /openapi.json and renders it in Swagger UI at /docs.
+
