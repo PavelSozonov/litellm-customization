@@ -786,18 +786,29 @@ def run_server(  # noqa: PLR0915
                 "(https://models.litellm.ai/)."
             )
 
-            # 3) Load and merge the OpenAI spec (YAML → JSON fallback)
+            # 3) Load the OpenAI spec (YAML → JSON fallback)
             text = SPEC_PATH.read_text()
             try:
                 spec = yaml.safe_load(text)
             except yaml.YAMLError:
                 spec = json.loads(text)
 
-            # Merge all paths
+            # 3.a) Recursively remove any "user" fields
+            def remove_user(obj):
+                if isinstance(obj, dict):
+                    obj.pop("user", None)
+                    for v in obj.values():
+                        remove_user(v)
+                elif isinstance(obj, list):
+                    for item in obj:
+                        remove_user(item)
+            remove_user(spec)
+
+            # 3.b) Merge all paths
             for path, item in spec.get("paths", {}).items():
                 base["paths"][path] = item
 
-            # Merge components (schemas, securitySchemes, etc.)
+            # 3.c) Merge components (schemas, securitySchemes, etc.)
             comps = spec.get("components", {})
             for section in ("schemas", "securitySchemes"):
                 base.setdefault("components", {}) \
