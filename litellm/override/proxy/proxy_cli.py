@@ -793,16 +793,17 @@ def run_server(  # noqa: PLR0915
             except yaml.YAMLError:
                 spec = json.loads(text)
 
-            # 3.a) Recursively remove any "user" fields
-            def remove_user(obj):
+            # 3.a) Clean out any unwanted fields ("user" and "x-oaiMeta")
+            def clean_spec(obj):
                 if isinstance(obj, dict):
                     obj.pop("user", None)
+                    obj.pop("x-oaiMeta", None)
                     for v in obj.values():
-                        remove_user(v)
+                        clean_spec(v)
                 elif isinstance(obj, list):
                     for item in obj:
-                        remove_user(item)
-            remove_user(spec)
+                        clean_spec(item)
+            clean_spec(spec)
 
             # 3.b) Merge all paths
             for path, item in spec.get("paths", {}).items():
@@ -835,6 +836,7 @@ def run_server(  # noqa: PLR0915
         app.openapi = custom_openapi
 
         ## Custom patch END ##
+
 
 
         uvicorn_args = ProxyInitializationHelpers._get_default_unvicorn_init_args(
